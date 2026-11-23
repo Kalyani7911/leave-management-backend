@@ -8,6 +8,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import com.example.leave_management.dto.BalanceResponse;
+import com.example.leave_management.dto.CurrentUser;
 import com.example.leave_management.dto.LeaveRequestDto;
 import com.example.leave_management.dto.LeaveResponse;
 import com.example.leave_management.entity.Employee;
@@ -15,6 +16,7 @@ import com.example.leave_management.entity.LeaveRequest;
 import com.example.leave_management.entity.LeaveStatus;
 import com.example.leave_management.entity.LeaveType;
 import com.example.leave_management.exception.BusinessRuleException;
+import com.example.leave_management.exception.ForbiddenException;
 import com.example.leave_management.exception.InsufficientLeaveBalanceException;
 import com.example.leave_management.exception.ResourceNotFoundException;
 import com.example.leave_management.repository.EmployeeRepository;
@@ -33,7 +35,10 @@ public class LeaveService {
     private final LeaveTypeRepository typeRepo;
 
     @Transactional
-    public LeaveResponse apply(LeaveRequestDto dto) {
+    public LeaveResponse apply(LeaveRequestDto dto, CurrentUser user) {
+        if (!dto.employeeId().equals(user.id())) {
+            throw new ForbiddenException("You can only request leave for yourself");
+        }
         if (dto.toDate().isBefore(dto.fromDate())) {
             throw new BusinessRuleException("To date cannot be before from date");
         }
@@ -65,30 +70,44 @@ public class LeaveService {
         return toResponse(leaveRepo.save(request));
     }
 
-    public List<LeaveResponse> forEmployee(Long employeeId) {
+    public List<LeaveResponse> forEmployee(Long employeeId, CurrentUser user) {
+        requireCanView(employeeId, user);
         return leaveRepo.findByEmployeeIdOrderByFromDateDesc(employeeId).stream()
                 .map(this::toResponse)
                 .toList();
     }
 
-    public List<LeaveResponse> pendingForManager(Long managerId) {
+    public List<LeaveResponse> pendingForManager(Long managerId, CurrentUser user) {
+        if (!managerId.equals(user.id()) && !user.isHr()) {
+            throw new ForbiddenException("You can only see requests from your own team");
+        }
         return leaveRepo.findByEmployeeManagerIdAndStatus(managerId, LeaveStatus.PENDING).stream()
                 .map(this::toResponse)
                 .toList();
     }
 
     @Transactional
-    public LeaveResponse decide(Long id, LeaveStatus newStatus) {
+    public LeaveResponse decide(Long id, LeaveStatus newStatus, CurrentUser user) {
         LeaveRequest request = leaveRepo.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Leave request not found"));
+
+        Employee owner = request.getEmployee();
+        if (owner.getId().equals(user.id())) {
+            throw new ForbiddenException("You cannot approve or reject your own request");
+        }
+        if (!isManagerOf(owner, user) && !user.isHr()) {
+            throw new ForbiddenException("You can only decide requests from your own team");
+        }
         if (request.getStatus() != LeaveStatus.PENDING) {
             throw new BusinessRuleException("Only pending requests can be approved or rejected");
         }
+
         request.setStatus(newStatus);
         return toResponse(request);
     }
 
-    public List<BalanceResponse> balance(Long employeeId) {
+    public List<BalanceResponse> balance(Long employeeId, CurrentUser user) {
+        requireCanView(employeeId, user);
         int year = LocalDate.now().getYear();
         return typeRepo.findAll().stream()
                 .map(type -> {
@@ -97,6 +116,23 @@ public class LeaveService {
                             used, type.getYearlyQuota() - used);
                 })
                 .toList();
+    }
+
+    // you can view your own data, your team's data (if you are their manager), or
+    // anyone's (HR)
+    private void requireCanView(Long employeeId, CurrentUser user) {
+        if (employeeId.equals(user.id()) || user.isHr()) {
+            return;
+        }
+        Employee target = employeeRepo.findById(employeeId)
+                .orElseThrow(() -> new ResourceNotFoundException("Employee not found"));
+        if (!isManagerOf(target, user)) {
+            throw new ForbiddenException("You are not allowed to view this employee's leave");
+        }
+    }
+
+    private boolean isManagerOf(Employee employee, CurrentUser user) {
+        return employee.getManager() != null && employee.getManager().getId().equals(user.id());
     }
 
     private LeaveResponse toResponse(LeaveRequest l) {
