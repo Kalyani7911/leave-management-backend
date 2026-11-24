@@ -67,6 +67,7 @@ public class SecurityConfig {
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
                         .requestMatchers("/api/auth/login").permitAll()
+                        .requestMatchers(HttpMethod.GET, "/api/health").permitAll()
                         .requestMatchers(HttpMethod.PUT, "/api/leaves/*/approve", "/api/leaves/*/reject")
                         .hasAnyRole("MANAGER", "HR")
                         .anyRequest().authenticated())
