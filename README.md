@@ -4,6 +4,19 @@ A REST API for employee leave management, built with **Spring Boot** and **Postg
 
 Frontend repository: [leave-management-frontend](https://github.com/Kalyani7911/leave-management-frontend)
 
+## Live demo
+
+- Website: **https://leave-management-frontend-psi.vercel.app**
+- API base URL: `https://leave-management-backend-ettg.onrender.com`
+
+The API runs on a free hosting plan with a free PostgreSQL database. The server goes to sleep when nobody is using it, so the first request after a quiet period can take up to a minute. After that, it responds normally.
+
+Try the login endpoint with the demo account:
+
+```
+curl -X POST https://leave-management-backend-ettg.onrender.com/api/auth/login -H "Content-Type: application/json" -d '{"email":"pravin.patil@example.com","password":"Leave@123"}'
+```
+
 ## Features
 
 - JWT login with three roles: Employee, Manager and HR
