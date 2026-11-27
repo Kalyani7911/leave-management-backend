@@ -28,6 +28,7 @@ public class Employee {
     private String name;
 
     private String email;
+    private String employeeCode;
     private String passwordHash;
 
     @Enumerated(EnumType.STRING)

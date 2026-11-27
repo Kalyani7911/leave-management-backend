@@ -26,35 +26,36 @@ import lombok.RequiredArgsConstructor;
 @Transactional(readOnly = true)
 public class AuthService {
 
-    private final EmployeeRepository employeeRepo;
-    private final PasswordEncoder passwordEncoder;
-    private final JwtEncoder jwtEncoder;
+        private final EmployeeRepository employeeRepo;
+        private final PasswordEncoder passwordEncoder;
+        private final JwtEncoder jwtEncoder;
 
-    @Value("${app.jwt.expiry-minutes}")
-    private long expiryMinutes;
+        @Value("${app.jwt.expiry-minutes}")
+        private long expiryMinutes;
 
-    public LoginResponse login(LoginRequest request) {
-        Employee employee = employeeRepo.findByEmail(request.email().trim().toLowerCase())
-                .orElseThrow(() -> new UnauthorizedException("Invalid email or password"));
+        public LoginResponse login(LoginRequest request) {
+                Employee employee = employeeRepo
+                                .findByEmployeeCode(request.employeeCode().trim().toUpperCase())
+                                .orElseThrow(() -> new UnauthorizedException("Invalid employee ID or password"));
 
-        if (!passwordEncoder.matches(request.password(), employee.getPasswordHash())) {
-            throw new UnauthorizedException("Invalid email or password");
+                if (!passwordEncoder.matches(request.password(), employee.getPasswordHash())) {
+                        throw new UnauthorizedException("Invalid employee ID or password");
+                }
+
+                Instant now = Instant.now();
+                JwtClaimsSet claims = JwtClaimsSet.builder()
+                                .subject(String.valueOf(employee.getId()))
+                                .issuedAt(now)
+                                .expiresAt(now.plus(expiryMinutes, ChronoUnit.MINUTES))
+                                .claim("role", employee.getRole().name())
+                                .claim("name", employee.getName())
+                                .build();
+
+                String token = jwtEncoder
+                                .encode(JwtEncoderParameters.from(JwsHeader.with(MacAlgorithm.HS256).build(), claims))
+                                .getTokenValue();
+
+                return new LoginResponse(token, employee.getId(), employee.getEmployeeCode(),
+                                employee.getName(), employee.getRole(), employee.getDepartment().getName());
         }
-
-        Instant now = Instant.now();
-        JwtClaimsSet claims = JwtClaimsSet.builder()
-                .subject(String.valueOf(employee.getId()))
-                .issuedAt(now)
-                .expiresAt(now.plus(expiryMinutes, ChronoUnit.MINUTES))
-                .claim("role", employee.getRole().name())
-                .claim("name", employee.getName())
-                .build();
-
-        String token = jwtEncoder
-                .encode(JwtEncoderParameters.from(JwsHeader.with(MacAlgorithm.HS256).build(), claims))
-                .getTokenValue();
-
-        return new LoginResponse(token, employee.getId(), employee.getName(),
-                employee.getRole(), employee.getDepartment().getName());
-    }
 }

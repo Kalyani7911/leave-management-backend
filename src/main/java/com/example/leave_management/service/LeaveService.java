@@ -54,11 +54,14 @@ public class LeaveService {
             throw new BusinessRuleException("You already have leave on these dates");
         }
 
-        long days = ChronoUnit.DAYS.between(dto.fromDate(), dto.toDate()) + 1;
-        long used = leaveRepo.usedDays(employee.getId(), type.getId(), dto.fromDate().getYear());
-        if (used + days > type.getYearlyQuota()) {
-            throw new InsufficientLeaveBalanceException("Only " + (type.getYearlyQuota() - used)
-                    + " day(s) of " + type.getName() + " leave left");
+        // a leave type without a quota (Loss of Pay) has no yearly limit
+        if (type.getYearlyQuota() != null) {
+            long days = ChronoUnit.DAYS.between(dto.fromDate(), dto.toDate()) + 1;
+            long used = leaveRepo.usedDays(employee.getId(), type.getId(), dto.fromDate().getYear());
+            if (used + days > type.getYearlyQuota()) {
+                throw new InsufficientLeaveBalanceException("Only " + (type.getYearlyQuota() - used)
+                        + " day(s) of " + type.getName() + " left");
+            }
         }
 
         LeaveRequest request = new LeaveRequest();
@@ -66,15 +69,16 @@ public class LeaveService {
         request.setLeaveType(type);
         request.setFromDate(dto.fromDate());
         request.setToDate(dto.toDate());
-        request.setReason(dto.reason());
+        request.setReason(dto.reason().trim());
         return toResponse(leaveRepo.save(request));
     }
 
-    public List<LeaveResponse> forEmployee(Long employeeId, CurrentUser user) {
+    public List<LeaveResponse> forEmployee(Long employeeId, Integer year, CurrentUser user) {
         requireCanView(employeeId, user);
-        return leaveRepo.findByEmployeeIdOrderByFromDateDesc(employeeId).stream()
-                .map(this::toResponse)
-                .toList();
+        List<LeaveRequest> requests = (year == null)
+                ? leaveRepo.findByEmployeeIdOrderByFromDateDesc(employeeId)
+                : leaveRepo.findByEmployeeAndYear(employeeId, year);
+        return requests.stream().map(this::toResponse).toList();
     }
 
     public List<LeaveResponse> pendingForManager(Long managerId, CurrentUser user) {
@@ -112,8 +116,9 @@ public class LeaveService {
         return typeRepo.findAll().stream()
                 .map(type -> {
                     long used = leaveRepo.usedDays(employeeId, type.getId(), year);
-                    return new BalanceResponse(type.getName(), type.getYearlyQuota(),
-                            used, type.getYearlyQuota() - used);
+                    Integer quota = type.getYearlyQuota();
+                    Long remaining = (quota == null) ? null : (long) quota - used;
+                    return new BalanceResponse(type.getName(), quota, used, remaining);
                 })
                 .toList();
     }

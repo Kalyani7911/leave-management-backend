@@ -22,5 +22,6 @@ public class LeaveType {
 
     private String name;
 
-    private int yearlyQuota;
+    // private int yearlyQuota;
+    private Integer yearlyQuota;
 }

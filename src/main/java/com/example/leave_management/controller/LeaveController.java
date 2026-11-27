@@ -39,9 +39,19 @@ public class LeaveController {
         return service.apply(dto, CurrentUser.from(jwt));
     }
 
+    /*
+     * @GetMapping("/employee/{id}")
+     * public List<LeaveResponse> mine(@PathVariable Long
+     * id, @AuthenticationPrincipal Jwt jwt) {
+     * return service.forEmployee(id, CurrentUser.from(jwt));
+     * }
+     */
+
     @GetMapping("/employee/{id}")
-    public List<LeaveResponse> mine(@PathVariable Long id, @AuthenticationPrincipal Jwt jwt) {
-        return service.forEmployee(id, CurrentUser.from(jwt));
+    public List<LeaveResponse> mine(@PathVariable Long id,
+            @RequestParam(required = false) Integer year,
+            @AuthenticationPrincipal Jwt jwt) {
+        return service.forEmployee(id, year, CurrentUser.from(jwt));
     }
 
     @GetMapping("/pending")

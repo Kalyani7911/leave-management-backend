@@ -9,4 +9,6 @@ import com.example.leave_management.entity.Employee;
 public interface EmployeeRepository extends JpaRepository<Employee, Long> {
 
     Optional<Employee> findByEmail(String email);
+
+    Optional<Employee> findByEmployeeCode(String employeeCode);
 }
